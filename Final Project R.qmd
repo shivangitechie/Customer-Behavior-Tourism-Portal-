@@ -1,0 +1,624 @@
+---
+title: "Final Project R"
+author: "23206952"
+format:
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## Part 1: Analysis
+
+The dataset chosen for this task has been downloaded from Kaggle:
+
+https://www.kaggle.com/datasets/ddosad/customer-behaviour-tourism-portal
+
+Let us first understand what this data contains.
+
+1.  **`UserID`** - Unique ID of the user
+2.  **`Taken_product`** - The response variable that indicates whether a product has been taken or not.
+3.  **`Yearly_avg_view_on_travel_page`** - Average yearly views on any travel related page by the user
+4.  **`preferred_device`** - Preferred device for user login
+5.  **`total_likes_on_outstation_checkin_given`** - Total number of likes given by the user on out-of-station-check-ins in the last year
+6.  **`yearly_avg_Outstation_checkins`** - Average number of out-of-station-check-ins done by the user.
+7.  **`member_in_family`** - Total number of relationships mentioned by the user in the account
+8.  **`preferred_location_type`** - Preferred type of location for travelling by the user
+9.  **`Yearly_avg_comment_on_travel_page`** - Average yearly comments on any travel-related page by the user
+10. **`total_likes_on_outofstation_checkin_received`** - Total number of likes received by the user on out-of-station-check-ins
+11. **`week_since_last_outstation_checkin`** - Number of weeks since the last out-of-station-check-in updated by the user
+12. **`following_company_page`** - Whether the customer is following the company page ('Yes' or 'No')
+13. **`montly_avg_comment_on_company_page`** - Average monthly comments on the company page by the user.
+14. **`working_flag`** - Whether the customer is working or not
+15. **`travelling_network_rating`** - The rating indicating if the user has close friends who also like travelling. 1 is high, 4 is lowest.
+16. **`Adult_flag`** - Whether the customer is an adult or not
+17. **`Daily_Avg_mins_spend_on_traveling_page`** - Average time spent on the company's travel page by the user.
+
+**For this task we want to focus on the following points:**
+
+1.1 Structure of the Dataset
+
+1.2 Cleaning the dataset for Analysis
+
+1.3 Numerical and Graphical Summaries for Distribution
+
+1.4 Numerical and Graphical Summaries for Relational Columns
+
+1.5 Conclusion
+
+### **1.1 Structure of the Dataset**
+
+Let us load the dataset and look at its structure.
+
+```{r}
+Customer_behaviour_Tourism <- read.csv("Customer behaviour Tourism.csv")
+str(Customer_behaviour_Tourism)
+```
+
+The chosen dataset is a dataframe with 11760 observations and 17 variables.
+
+Let us check the class of every variable.
+
+```{r}
+sapply(Customer_behaviour_Tourism,class)
+```
+
+We can see that the dataset contains 7 categorical variables and 10 numerical variables. USER ID is only an index and can be dropped for the analysis.
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism[, -1]
+```
+
+### 1.2 Cleaning the Dataset for Analysis
+
+Let us first look at the categorical columns present in the dataset.
+
+```{r}
+categorical_cols <- sapply(Customer_behaviour_Tourism, function(x) is.factor(x) || is.character(x))
+
+# Loop through categorical columns
+for (col in names(Customer_behaviour_Tourism)[categorical_cols]) {
+  cat("Catgories for", col, "\n")
+  print(unique(Customer_behaviour_Tourism[[col]]))
+  cat("\n")
+}
+```
+
+It looks like some of these categorical columns require a lot of cleaning. Let us work through these columns one by one before we look for NA values.
+
+1.  **`preferred_device`**
+
+```{r}
+library(dplyr)
+print(unique(Customer_behaviour_Tourism$preferred_device))
+```
+
+The data seems to be too widely categorised in terms of `preferred_device`. It turns out that only 4 categories are required: \<Mobile, Tab, Laptop, Others. Let us perform the following mapping to ensure that we include everything in these 4 categories.
+
+Mobile: "ANDROID","Android", "iOS and Android", "iOS","Android OS"
+
+Others: Other
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(preferred_device = ifelse(preferred_device %in% c("ANDROID","Android", "iOS and Android", "iOS","Android OS"), "Mobile", preferred_device)) |>
+  mutate(preferred_device = ifelse(preferred_device == "Other", "Others", preferred_device))
+unique(Customer_behaviour_Tourism$preferred_device)
+```
+
+This gives us 3 main categories: **Mobile**, **Tab**, and **Laptop**. There is an additional category "" which needs to be replaced. For this let us look at the value count for each category.
+
+```{r}
+category_counts <- table(Customer_behaviour_Tourism$preferred_device)
+category_counts
+```
+
+It appears that **`Tab`** has the highest value count. So we would replace "" with **`Tab`**.
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(preferred_device = ifelse(preferred_device == "","Tab", preferred_device))
+unique(Customer_behaviour_Tourism$preferred_device)
+```
+
+2.  **`yearly_avg_Outstation_checkins`**
+
+Now let us look at Yearly average outstation checkins. It is coded as a categorical variable.
+
+```{r}
+unique(Customer_behaviour_Tourism$yearly_avg_Outstation_checkins)
+```
+
+There appears to be only 1 problem with this column, the presence of "", and"\*" symbols. In order to replace these let us again look at the maximum value count of the categories.
+
+```{r}
+oc_counts<-table(Customer_behaviour_Tourism$yearly_avg_Outstation_checkins)
+names(oc_counts)[which.max(category_counts)]
+```
+
+We will replace "", and"\*" with "1".
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(yearly_avg_Outstation_checkins = ifelse(yearly_avg_Outstation_checkins %in% c("", "*"),"1", yearly_avg_Outstation_checkins)) 
+unique(Customer_behaviour_Tourism$yearly_avg_Outstation_checkins)
+```
+
+3.  **`member_in_family`**
+
+```{r}
+unique(Customer_behaviour_Tourism$member_in_family)
+```
+
+We want to replace the "Three" with 3.
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(member_in_family = ifelse(member_in_family == "Three", "3", member_in_family)) 
+unique(Customer_behaviour_Tourism$member_in_family)
+```
+
+4.  **`following_company_page`**
+
+```{r}
+unique(Customer_behaviour_Tourism$following_company_page)
+```
+
+We have to recode "1" and "Yeso" as "Yes", and "0" and "" as "No", assuming "" (empty cell) indicates a "No" value.
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(following_company_page = ifelse(following_company_page %in% c("1","Yeso"), "Yes", "No"))
+unique(Customer_behaviour_Tourism$following_company_page)
+```
+
+5.  **`working_flag`**
+
+```{r}
+unique(Customer_behaviour_Tourism$working_flag)
+```
+
+We want to recode "0" as a "No".
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(working_flag = ifelse(working_flag == "0", "No", working_flag))
+unique(Customer_behaviour_Tourism$working_flag)
+```
+
+6.  **`preferred_location_type`**
+
+```{r}
+unique(Customer_behaviour_Tourism$preferred_location_type)
+```
+
+Let us preform the following mapping to include this wide spread of categories into a more precise representation.
+
+Tour and Travel : "Tour Travel", "Trekking", "Hill Stations", "Beach", "Historical sites", "Big cities"
+
+Entertainment: "Movie", "OTT", "Game", "Social media"
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(preferred_location_type = ifelse(preferred_location_type %in% c("Tour  Travel", "Trekking", "Hill Stations", "Beach", "Historical site", "Big Cities"), "Tour and Travel", preferred_location_type)) |>
+  mutate(preferred_location_type = ifelse(preferred_location_type %in% c("Movie", "OTT", "Game", "Social media"), "Entertainment", preferred_location_type)) 
+unique(Customer_behaviour_Tourism$preferred_location_type)
+```
+
+Now let us check the mode of the column to replace "".
+
+```{r}
+lt_counts<-table(Customer_behaviour_Tourism$preferred_location_type)
+names(lt_counts)[which.max(lt_counts)]
+```
+
+So, we will replace the "" (empty cell) with "Tour and Travel".
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(preferred_location_type = ifelse(preferred_location_type == "", "Tour and Travel", preferred_location_type))
+unique(Customer_behaviour_Tourism$preferred_location_type)
+```
+
+Now that we have fixed the categorical columns, let us look at the dataset to check if any of the columns should be coded as a categorical column.
+
+We can see that **`travelling_network_rating`** and **`Adult_flag`** should be categorical columns. Let us make that adjustment.
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  mutate(travelling_network_rating = as.factor(travelling_network_rating))|>
+  mutate(Adult_flag = as.factor(Adult_flag))
+```
+
+```{r}
+print(levels(Customer_behaviour_Tourism$travelling_network_rating))
+print(levels(Customer_behaviour_Tourism$Adult_flag))
+```
+
+Now that we have dealt with the categorical columns, let us check for NA values in the dataset.
+
+```{r}
+colSums(is.na(Customer_behaviour_Tourism))
+```
+
+We can see that the NA values do no contribute to much of the data. Hence, it would be a harmless step to remove the NA values from the dataset.
+
+```{r}
+Customer_behaviour_Tourism <- Customer_behaviour_Tourism |>
+  filter(Yearly_avg_view_on_travel_page != "NA") |>
+  filter(total_likes_on_outstation_checkin_given != "NA") |>
+  filter(Yearly_avg_comment_on_travel_page != "NA") |>
+  filter(Adult_flag != "NA") |>
+  filter(Daily_Avg_mins_spend_on_traveling_page != "NA")
+```
+
+```{r}
+colSums(is.na(Customer_behaviour_Tourism))
+```
+
+The dataset is now cleaned. Let us start performing some numerical and graphical analysis on this dataset.
+
+### 1.3 Numerical and Graphical Summaries for Distribution
+
+Let us look at the summary of the data.
+
+```{r}
+print(summary(Customer_behaviour_Tourism))
+```
+
+**Explanation of this dataset**
+
+The categorical columns are indicated. We will focus our analysis to numerical data.
+
+1.  **Yearly average view on travel page:** This seems to have an average value around the mark 280 indicating that on an average approximately 280 people view the travel page in a year. The minimum is at 35 which appears to be an outlier. The distribution has heavier tails in the above 50% of the data. It is not uniformly distributed.
+2.  **Total likes on outstation given:** This distribution follows a more constant curve with different values having almost similar frequencies. The mean lies at approximately 28000. There is an outlier present at approximately 150000.
+3.  **Yearly Average Comment on Travel Page:** There is not much variance in this data distribution. It is centered at about 75. There is an outlier present in the data at the maximum value 685. On an average we can see around 75 comments yearly on the travel page with this number not deviating much throughout the year.
+4.  **Total Likes on Out-of-station Check-in received:** This distribution is clearly positively skewed. It has a mean at about 6500 and values range upto 20000. Most of the data is concentrated around the mean value.
+5.  **Weeks Since Last Out-of-station check-in:** Again though the distribution is not properly continuous, the data appears to be positively skewed. It has a mean at about 3, indicating that on an average people take 3 weeks for their next out-of-station check-ins.
+6.  **Monthly average comment on Travel Page:** On a monthly basis, the average number of comments on the page seem to have a mean of 28 with not much variation except for fe outliers between 300 and 500.
+7.  **Daily Average Minutes Spent on Travel Page:** The data does not have much variation except for outliers at 130, 175, and 250. The daily average minutes spent on the travel page have a mean of 13.
+
+**Graphical Summary for Categorical Data**
+
+Let us look at the frequencies of all the categories in categorical columns.
+
+```{r}
+categorical_cols <- sapply(Customer_behaviour_Tourism, function(x) is.factor(x) || is.character(x))
+
+library(ggplot2)
+
+for (col in names(Customer_behaviour_Tourism)[categorical_cols]) {
+  # Create a separate plot for each categorical column
+  p <- ggplot(Customer_behaviour_Tourism, aes_string(x = col, fill = col)) +
+    geom_bar(alpha = 0.7) +
+    labs(title = paste("Frequency of", col),
+         x = col,
+         y = "Frequency") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+  # Print or save the plot
+  print(p)
+}
+```
+
+**Explanation of the graphical summary for Categorical data.**
+
+1.  **Taken Product:** This is our target variable that can be predicted using the information in from the remaining variables. It turns out that a lot of the proportion of this column lies in "No\
+    , i.e. the product was not taken."Yes" category only holds an approximately 25% of the points.
+2.  **Preferred Device:** The maximum proportion holder of this column is "Mobile", followed by "Tab", and then "Laptop", with "Others" holding a negligible proportion. We can say most people prefer to use Mobiles for travel bookings.
+3.  **Yearly Average Outstation Check-ins:** Turns out there are mostly 1 yearly average out of station check-ins done by most users in this data. The rest of the categories hold a much smaller proportion as compared to "1".
+4.  **Members in Family:** Most families tend to have 3, followed by 4, followed by 2 members in their family. Categories 5 and 1 comparatively smaller. And 10 appears to be an outlier.
+5.  **Preferred Location:** The most common preferred location falls under Tour and Travel which contains hill stations, trekking, beaches, Historical sites, Big cities, etc. This is followed by Financial reasons, then Medical, then Entertainment, and finally Others.
+6.  **Following Company Page:** It turns out that most people do not follow the company's page they are visiting or booking their tickets from. "Yes" almost appears as an outlier.
+7.  **Working Flag:** It appears that most of the users booking the tour do not work. The proportion of working people is much smaller.
+8.  **Travelling Network Rating:** From the graph it can be seen that most of the people booking their tours do not have close friends who also like to travel, however, the proportion for people who do have friends that like to travel is still significant.
+9.  **Adult Flag:** The proportion of adults in smaller than no adults.
+
+**Graphical Summary for Numerical Data**
+
+Let us also look at the histogram for numerical data.
+
+```{r}
+numerical_cols <- sapply(Customer_behaviour_Tourism, function(x) is.numeric(x))
+library(ggplot2)
+
+for (col in names(Customer_behaviour_Tourism)[numerical_cols]) {
+  # Create a separate plot for each numerical column
+  p <- ggplot(Customer_behaviour_Tourism, aes_string(x = col)) +
+    geom_histogram(bins = 20, fill = "blue", color = "#333333", alpha = 0.7) +
+    labs(title = paste("Histogram of", col),
+         x = col,
+         y = "Frequency") +
+    theme_minimal()
+
+  # Print or save the plot
+  print(p)
+}
+```
+
+**Explanation of the Graphs of Numerical Data**
+
+1.  **Yearly average view on travel page:** This seems to have an average value around the mark 280 indicating that on an average approximately 280 people view the travel page in a year. The minimum is at 35 which appears to be an outlier. The distribution has heavier tails in the above 50% of the data. It is not uniformly distributed.
+2.  **Total likes on outstation given:** This distribution follows a more constant curve with different values having almost similar frequencies. The mean lies at approximately 28000. There is an outlier present at approximately 150000.
+3.  **Yearly Average Comment on Travel Page:** There is not much variance in this data distribution. It is centered at about 75. There is an outlier present in the data at the maximum value 685. On an average we can see around 75 comments yearly on the travel page with this number not deviating much throughout the year.
+4.  **Total Likes on Out-of-station Check-in received:** This distribution is clearly positively skewed. It has a mean at about 6500 and values range upto 20000. Most of the data is concentrated around the mean value.
+5.  **Weeks Since Last Out-of-station check-in:** Again though the distribution is not properly continuous, the data appears to be positively skewed. It has a mean at about 3, indicating that on an average people take 3 weeks for their next out-of-station check-ins.
+6.  **Monthly average comment on Travel Page:** On a monthly basis, the average number of comments on the page seem to have a mean of 28 with not much variation except for fe outliers between 300 and 500.
+7.  **Daily Average Minutes Spent on Travel Page:** The data does not have much variation except for outliers at 130, 175, and 250. The daily average minutes spent on the travel page have a mean of 13.
+
+### 1.4 Numerical and Graphical Summaries for Relational Columns
+
+For this task let us first plot a correlation plot to check the correlation between variables.
+
+```{r}
+library(corrplot)
+numerical_data <- Customer_behaviour_Tourism[,numerical_cols]
+print(colnames(numerical_data))
+# Rename the columns as follows
+# [1] "Yearly_avg_view_on_travel_page"  : X1            
+# [2] "total_likes_on_outstation_checkin_given" : X2
+# [3] "Yearly_avg_comment_on_travel_page" : X3
+# [4] "total_likes_on_outofstation_checkin_received" : X4
+# [5] "week_since_last_outstation_checkin" : X5
+# [6] "montly_avg_comment_on_company_page" : X6     
+# [7] "Daily_Avg_mins_spend_on_traveling_page" : X7
+colnames(numerical_data)<-c("X1","X2","X3","X4","X5","X6","X7")
+cor_matrix <- cor(numerical_data)
+corrplot(cor_matrix)
+```
+
+There seems to be a significant correlation between `Yearly_avg_view_on_travel_page`, and `Daily_Avg_mins_spend_on_traveling_page`, and `total_likes_on_outofstation_checkin_received` and `Daily_Avg_mins_spend_on_traveling_page`.
+
+Now that we have plotted the densities of the categorical and numerical columns, let us now look for variability in numerical columns based on categorical columns.
+
+For this task let us focus on the numerical entry `total_likes_on_Outstation_checkin_given` based on the categorical entry `preferred_location_type`.
+
+```{r}
+tapply(Customer_behaviour_Tourism$total_likes_on_outstation_checkin_given, as.factor(Customer_behaviour_Tourism$preferred_location_type), mean)
+```
+
+Turns out the average likes on outstation checkin given yearly is maximum for "Medical". However, it must be noted, that the other categories do not show large disparities and the average values are close together.
+
+### 1.5 Conclusion
+
+We have seen the structure of this dataset. In the process of data cleaning, we were required to look at the numerical columns and check the kind of values it represented. The categorical columns required cleaning. That was done based on including redundant columns into a broader category. The NA values and missing cells "" were dealt with by either removing them from the column or replacing them with a different value. Once the data was cleaned, we performed numerical and graphical summaries to it. We checked the correlation between numerical variables, and saw an example of finding numerical counts based on categories.
+
+## Task 2: R Package (glmnet)
+
+The **`glmnet`** package in R is a powerful and widely-used package for fitting generalized linear models (GLMs) with regularization, particularly LASSO (L1 regularization) and ridge (L2 regularization) penalties. Developed by Jerome Friedman, Trevor Hastie, and Rob Tibshirani, the package provides efficient algorithms for fitting models with elastic-net regularization, which combines both LASSO and ridge penalties.
+
+### **Key Features:**
+
+1.  **Regularization Techniques:**
+
+    -   **L1 (LASSO) and L2 (ridge) regularization:** These penalties help prevent overfitting and perform variable selection by shrinking some coefficients to exactly zero.
+
+    -   **Elastic-net regularization:** A combination of L1 and L2 penalties, offering a flexible approach that overcomes some limitations of individual penalties.
+
+2.  **Supported Families:**
+
+    -   The **`glmnet`** package supports a variety of families for different types of response variables, including:
+
+        -   Gaussian (linear regression)
+
+        -   Binomial (logistic regression)
+
+        -   Poisson (Poisson regression)
+
+        -   Multinomial (multinomial logistic regression)
+
+        -   Cox (Cox proportional hazards model for survival analysis)
+
+3.  **Efficient Algorithms:**
+
+    -   The package is optimized for efficiency and scalability, making it suitable for high-dimensional data sets with many predictors.
+
+4.  **Cross-Validation:**
+
+    -   **`cv.glmnet`** function: Cross-validation tools for model selection and tuning, allowing users to find the optimal values for regularization parameters.
+
+5.  **Pathwise Solutions:**
+
+    -   The package computes solutions along a regularization path, which is a sequence of models for varying levels of regularization.
+
+6.  **Model Coefficients:**
+
+    -   The fitted models provide coefficients for each predictor, indicating the strength and direction of their influence on the response variable.
+
+7.  **Use Cases**
+
+    -   Feature selection in high-dimensional data.
+
+    -   Regression and classification problems with a large number of predictors.
+
+    -   Model building with regularization to prevent overfitting.
+
+We will explore the following functions with demonstration on our dataset.
+
+We have a dataset that contains a binomial response variable, `Taken_product`. We will use glmnet to fit models with and without cross-validation to this dataset.
+
+1.  **`cv.glmnet`**
+
+**`cv.glmnet`** is a function in the R programming language provided by the **`glmnet`** package. It is commonly used for performing cross-validated model selection and tuning for the generalized linear model (GLM) with elastic-net regularization. Elastic-net regularization is a combination of L1 (LASSO) and L2 (ridge) regularization techniques, allowing for variable selection and handling multicollinearity in the data.
+
+```{r}
+library(glmnet)
+
+# Extract predictor variables (X) and target variable (Y)
+package_data <- Customer_behaviour_Tourism[,-c(1,2)]
+X <- as.matrix(package_data)
+Y <- as.vector(Customer_behaviour_Tourism$Taken_product)
+
+# Create a cross-validated glmnet model
+cv_model <- cv.glmnet(X, Y, family = "binomial")
+print(cv_model)
+```
+
+-   **Call**: This shows the call that was used to fit the model.
+
+-   **Measure**: The measure used for evaluation during cross-validation. In this case, it's the Binomial Deviance, which is a measure of how well the model predicts binary outcomes.
+
+-   **Lambda**: The regularization parameter. The values are provided for the minimum deviance (**`min`**) and one standard error (**`1se`**). These are often used to select the optimal model. A smaller **`lambda`** generally results in a less regularized model.
+
+-   **Index**: The index of the **`lambda`** value in the sequence of regularization parameters.
+
+-   **Measure**: The value of the measure (Binomial Deviance) at the specified **`lambda`**.
+
+-   **SE (Standard Error)**: The standard error of the measure at the specified **`lambda`**. Smaller standard errors suggest more stability in the measure.
+
+-   **Nonzero**: The number of nonzero coefficients in the model at the specified **`lambda`**. This indicates the complexity of the model; fewer nonzero coefficients suggest sparser models.
+
+**Interpreting the output:**
+
+1.  **Optimal Model**: The **`min`** row provides information about the optimal model (minimum deviance). In this case, the optimal **`lambda`** is 0.000615, and the corresponding Binomial Deviance is 0.8072.
+
+2.  **One Standard Error Rule**: The **`1se`** row provides an alternative choice for the optimal model, often selected using a one standard error rule. It's a slightly less complex model with a larger **`lambda`** (0.012068 in this case).
+
+3.  **Model Complexity**: The **`Nonzero`** column indicates the number of nonzero coefficients in the model. You can use this to understand the complexity of the selected models. In the **`min`** row, there are 11 nonzero coefficients, and in the **`1se`** row, there are 8. This indicates feature reduction.
+
+In summary, the output helps to identify an optimal or a slightly less complex model based on the chosen measure (Binomial Deviance) and the regularization parameter (**`lambda`**). It's a trade-off between model complexity and performance.
+
+2.  **`glmnet`**
+
+The **`glmnet`** function in the **`glmnet`** package of R is a core function for fitting generalized linear models (GLMs) with regularization. It is designed to handle high-dimensional data and is particularly useful when the number of predictors is large compared to the number of observations. The primary strength of **`glmnet`** lies in its ability to perform both L1 (LASSO) and L2 (ridge) regularization, as well as elastic-net regularization, which combines both penalties.
+
+```{r}
+model <- glmnet(X, Y, family = "binomial", alpha = 1)
+print(model)
+```
+
+**Interpreting the output:**
+
+1.  **Df (Degrees of Freedom)**: The **`Df`** column shows the number of nonzero coefficients in the model at each step. As **`lambda`** increases, the model becomes more regularized, and the number of nonzero coefficients decreases. It represents the complexity of the model.
+
+2.  **%Dev (Percent Deviance Explained)**: The **`%Dev`** column indicates the percent deviance explained by the model at each step. Larger values indicate better model fit. This helps in understanding how well the model performs as you move along the regularization path.
+
+3.  **Lambda (Regularization Parameter)**: The **`Lambda`** column shows the values of the regularization parameter (**`lambda`**). As you move down the list, **`lambda`** decreases, meaning the model becomes less regularized. The last row typically corresponds to the smallest **`lambda`** that minimizes the deviance (model complexity).
+
+You typically choose a **`lambda`** that balances model fit and simplicity. The output helps you understand how the model evolves as you move along the regularization path, providing insights into the trade-off between fitting the data well and keeping the model simple.
+
+3.  **`plot`**
+
+The **`plot`** method for **`glmnet`** objects in the **`glmnet`** package provides a convenient way to visualize the results of the regularization path. It allows users to inspect the coefficients along the entire regularization path, helping to understand the impact of regularization on the model and identify important predictors. The **`plot`** method is particularly useful for gaining insights into variable selection and understanding how the magnitude of coefficients changes with different levels of regularization.
+
+```{r}
+plot(model)
+```
+
+### **Interpretation:**
+
+-   The plot provides a visualization of the regularization path.
+
+-   The x-axis represents the regularization parameter lambda.
+
+-   The y-axis shows the values of the coefficients. At each lambda, the number of non-zero coefficients can be visualized in the plot.
+
+-   Each line corresponds to a different predictor. As the lambda varies, the deviance must reduce for these predictors, and hence a steeper deviance (y-axis) indicates a better fit.
+
+-   The plot helps identify the effect of regularization on each coefficient and understand which predictors are included or excluded as lambda changes.
+
+```{r}
+plot(cv_model)
+```
+
+### **Key Components of the `cv.glmnet` Plot:**
+
+1.  **Lambda Sequence:**
+
+    -   The x-axis represents the log scale of the lambda values used in the cross-validation.
+
+    -   Lambda controls the amount of regularization applied to the model.
+
+2.  **Deviance (or Another Performance Metric):**
+
+    -   The y-axis represents the cross-validated performance metric, such as deviance.
+
+    -   The lower the deviance, the better the model's fit to the data.
+
+3.  **Colorful Lines:**
+
+    -   Each line corresponds to a different value of the elastic net mixing parameter alpha.
+
+    -   Different colors or line types may represent different values of alpha.
+
+    -   For alpha = 0, it's Lasso regularization, and for alpha = 1, it's Ridge regularization.
+
+4.  **Vertical Dotted Lines:**
+
+    -   Dotted vertical lines indicate the values of lambda that minimize the cross-validated deviance for each alpha.
+
+    -   The point on the curve where the dotted line intersects represents the optimal lambda for the corresponding alpha.
+
+5.  **Shaded Region:**
+
+    -   The shaded region around each vertical line represents the standard error of the cross-validated performance.
+
+## Part 3: Functions
+
+We will use S3 class method for this task.
+
+```{r}
+# Logistic Regression Function using glm
+logistic_regression <- function(x, y) {
+  # Augment the input matrix x with a column of 1's for the intercept term
+  x = cbind(1, x)
+  
+  # Fit logistic regression using glm
+  model = glm(y ~ ., data = as.data.frame(x), family = binomial)
+  
+  # Extract coefficients, fitted values, residuals, and response variable
+  coefficients = coef(model)
+  fitted.values = predict(model, type = "response")
+  residuals = residuals(model)
+  response = model$y
+  
+  # Create a list to store the results
+  res = list(coefficients = coefficients, residuals = residuals, fitted.values = fitted.values, y = response)
+  
+  # Assign the class for S3 method dispatch
+  class(res) = "logistic_regression"
+  
+  # Return the result
+  return(res)
+}
+
+# Plot method for logistic_regression class
+plot.logistic_regression <- function(x, ...) {
+  # Plot observed values
+  plot(x$y, main = "Fitted x Observed", type = "l")
+  
+  # Overlay the fitted values on the plot
+  lines(x$fitted.values, col = 2)
+}
+
+# Summary method for logistic_regression class
+summary.logistic_regression <- function(object, digits = 4, ...) {
+  # Print a summary header
+  cat("Logistic Regression Summary:\n")
+  
+  # Print coefficients with specified number of digits
+  cat("Coefficients:\n")
+  print(object$coefficients, digits = digits)
+}
+
+# Example usage:
+set.seed(123)
+
+# Generate a matrix of random data
+x = matrix(rnorm(10 * 100), 100, 10)
+colnames(x) = 1:10
+
+# Generate probabilities and binary outcomes for logistic regression
+probabilities = 1 / (1 + exp(-(x %*% rep(1, ncol(x)) + rnorm(100))))
+y_logistic = ifelse(runif(100) < probabilities, 1, 0)
+
+# Perform logistic regression
+logistic_test = logistic_regression(x, y_logistic)
+
+# Check the class of the result
+class(logistic_test)
+
+# Display summary and plot
+summary(logistic_test, 3)
+plot(logistic_test)
+```
